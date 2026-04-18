@@ -10,17 +10,26 @@ export default function Chat() {
   const [user, setUser] = useState<any>(null);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [view, setView] = useState<'chat' | 'profile' | 'settings'>('chat');
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     const getUser = async () => {
       const { data: { session } } = await supabase().auth.getSession();
-      if (!session) navigate('/login');
-      else setUser(session.user);
+      if (!session) {
+        navigate('/login');
+      } else {
+        setUser(session.user);
+        setLoading(false);
+      }
     };
     getUser();
   }, [navigate]);
+
+  if (loading) {
+    return <div className="h-screen flex items-center justify-center">Loading...</div>;
+  }
 
   const toggleTheme = () => {
     setDarkMode(!darkMode);
