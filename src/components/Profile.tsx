@@ -10,23 +10,23 @@ export default function Profile() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   const updateProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase().auth.getUser();
     if (!user) return;
 
     let avatar_url = '';
     if (avatarFile) {
       const fileExt = avatarFile.name.split('.').pop();
       const fileName = `${user.id}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase().storage
         .from('avatars')
         .upload(fileName, avatarFile, { upsert: true });
       if (uploadError) { alert(uploadError.message); return; }
       
-      const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      const { data } = supabase().storage.from('avatars').getPublicUrl(fileName);
       avatar_url = data.publicUrl;
     }
 
-    const { error } = await supabase
+    const { error } = await supabase()
       .from('users')
       .upsert({ 
         id: user.id, 

@@ -1,39 +1,42 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Send, Image as ImageIcon, Smile } from 'lucide-react';
+import ChatSkeleton from './ChatSkeleton';
 
 export default function ChatInterface({ selectedUser, currentUser, darkMode }: { selectedUser: any; currentUser: any; darkMode: boolean }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // ... (keep useEffect for fetching and subscribing)
   useEffect(() => {
     const fetchMessages = async () => {
-      const { data } = await supabase
+      const { data } = await supabase()
         .from('messages')
         .select('*')
         .or(`sender_id.eq.${currentUser.id},sender_id.eq.${selectedUser.id}`)
         .order('created_at', { ascending: true });
       if (data) setMessages(data);
+      setLoading(false);
     };
     fetchMessages();
 
-    const channel = supabase
+    const channel = supabase()
       .channel('messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         setMessages((prev) => [...prev, payload.new]);
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase().removeChannel(channel); };
   }, [selectedUser, currentUser]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
-    await supabase.from('messages').insert({
+    await supabase().from('messages').insert({
       chat_id: 1, 
       sender_id: currentUser.id,
       content: newMessage,
@@ -57,16 +60,18 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[60%] p-4 rounded-3xl text-sm ${msg.sender_id === currentUser.id ? msgOwnClass : msgOtherClass}`}>
-              {msg.content}
+      {loading ? <ChatSkeleton /> : (
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {messages.map((msg) => (
+            <div key={msg.id} className={`flex ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[60%] p-4 rounded-3xl text-sm ${msg.sender_id === currentUser.id ? msgOwnClass : msgOtherClass}`}>
+                {msg.content}
+              </div>
             </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+      )}
 
       {/* Input */}
       <div className={`p-4 border-t ${borderClass} ${bgClass}`}>

@@ -15,7 +15,7 @@ export default function Chat() {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase().auth.getSession();
       if (!session) navigate('/login');
       else setUser(session.user);
     };
@@ -44,7 +44,7 @@ export default function Chat() {
            <button onClick={toggleTheme}>
              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
            </button>
-           <LogOut size={20} className="cursor-pointer hover:text-red-500" onClick={() => supabase.auth.signOut().then(() => navigate('/login'))}/>
+           <LogOut size={20} className="cursor-pointer hover:text-red-500" onClick={() => supabase().auth.signOut().then(() => navigate('/login'))}/>
         </div>
       </div>
 

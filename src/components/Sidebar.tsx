@@ -8,7 +8,7 @@ export default function Sidebar({ onSelectUser }: { onSelectUser: (user: any) =>
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const { data } = await supabase.from('users').select('*');
+      const { data } = await supabase().from('users').select('*');
       if (data) setUsers(data);
     };
     fetchUsers();

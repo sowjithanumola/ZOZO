@@ -12,7 +12,7 @@ export default function Login() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLogin) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase().auth.signInWithPassword({ email, password });
       if (error) {
         console.error('Login error:', error);
         alert(error.message);
@@ -20,7 +20,7 @@ export default function Login() {
         navigate('/');
       }
     } else {
-      const { error } = await supabase.auth.signUp({ 
+      const { error } = await supabase().auth.signUp({ 
         email, 
         password,
         options: {
