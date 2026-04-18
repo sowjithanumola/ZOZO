@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 export default function Profile() {
@@ -8,6 +8,30 @@ export default function Profile() {
   const [website, setWebsite] = useState('');
   const [gender, setGender] = useState('Male');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    async function fetchProfile() {
+      const { data: { user } } = await supabase().auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase()
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle(); // Use maybeSingle to avoid 406/PGRST116 errors
+      
+      if (error) {
+        console.error('Fetch profile error:', error);
+      } else if (data) {
+        setName(data.name || '');
+        setUsername(data.username || '');
+        setBio(data.bio || '');
+        setWebsite(data.website || '');
+        setGender(data.gender || 'Male');
+      }
+    }
+    fetchProfile();
+  }, []);
 
   const updateProfile = async () => {
     const { data: { user } } = await supabase().auth.getUser();
@@ -38,8 +62,12 @@ export default function Profile() {
         ...(avatar_url && { avatar_url }) 
       });
       
-    if (error) alert(error.message);
-    else alert('Profile updated!');
+    if (error) {
+      console.error('Upsert error:', error); // Log full error object
+      alert(`Error updating profile: ${error.message} - ${error.details || ''}`);
+    } else {
+      alert('Profile updated!');
+    }
   };
 
   return (
