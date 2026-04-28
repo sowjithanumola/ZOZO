@@ -12,13 +12,23 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   // ... (keep useEffect for fetching and subscribing)
   useEffect(() => {
     const fetchMessages = async () => {
-      const { data } = await supabase()
-        .from('messages')
-        .select('*')
-        .or(`sender_id.eq.${currentUser.id},sender_id.eq.${selectedUser.id}`)
-        .order('created_at', { ascending: true });
-      if (data) setMessages(data);
-      setLoading(false);
+      try {
+        const { data, error } = await supabase()
+          .from('messages')
+          .select('*')
+          .or(`sender_id.eq.${currentUser.id},sender_id.eq.${selectedUser.id}`)
+          .order('created_at', { ascending: true });
+        
+        if (error) {
+          console.error('Error fetching messages:', error);
+        } else if (data) {
+          setMessages(data);
+        }
+      } catch (e) {
+        console.error('Unexpected error fetching messages:', e);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchMessages();
 
@@ -36,12 +46,33 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
 
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
-    await supabase().from('messages').insert({
-      chat_id: 1, 
-      sender_id: currentUser.id,
-      content: newMessage,
-    });
-    setNewMessage('');
+    
+    // NOTE: Hardcoded chat_id is likely causing the 409 Conflict error.
+    // In a real app, this should be the ID of the chat between currentUser and selectedUser.
+    const chatId = 1; 
+
+    try {
+      const { error } = await supabase().from('messages').insert({
+        chat_id: chatId,
+        sender_id: currentUser.id,
+        content: newMessage,
+      });
+
+      if (error) {
+        console.error('Error sending message:', error);
+        // If it's a conflict, it might be due to a unique constraint violation or RLS.
+        if (error.code === '409') { // or check error.message
+          alert('Conflict error while sending message. Please check the chat setup.');
+        } else {
+          alert('Failed to send message: ' + error.message);
+        }
+      } else {
+        setNewMessage('');
+      }
+    } catch (e) {
+      console.error('Unexpected error sending message:', e);
+      alert('Unexpected error sending message');
+    }
   };
 
   const bgClass = darkMode ? 'bg-zinc-950' : 'bg-white';

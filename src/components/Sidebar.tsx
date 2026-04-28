@@ -8,8 +8,16 @@ export default function Sidebar({ onSelectUser }: { onSelectUser: (user: any) =>
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const { data } = await supabase().from('users').select('*');
-      if (data) setUsers(data);
+      try {
+        const { data, error } = await supabase().from('users').select('*');
+        if (error) {
+          console.error('Error fetching users:', error);
+        } else if (data) {
+          setUsers(data);
+        }
+      } catch (e) {
+        console.error('Unexpected error fetching users:', e);
+      }
     };
     fetchUsers();
   }, []);
