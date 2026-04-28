@@ -78,7 +78,12 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || chatId === null) return;
+    if (!newMessage.trim()) return;
+    if (chatId === null) {
+      console.log('Cannot send: chatId is null');
+      alert('Chat is still initializing, please wait a moment.');
+      return;
+    }
     
     try {
       const { error } = await supabase().from('messages').insert({
@@ -136,6 +141,11 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
             <input 
               value={newMessage} 
               onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  sendMessage();
+                }
+              }}
               className={`flex-1 ${inputBgClass} border ${borderClass} rounded-full px-5 py-3 text-sm outline-none focus:ring-1 focus:ring-blue-500`}
               placeholder="Message..."
             />

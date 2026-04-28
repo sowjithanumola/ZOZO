@@ -16,12 +16,20 @@ export default function Chat() {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { session } } = await supabase().auth.getSession();
-      if (!session) {
-        navigate('/login');
-      } else {
-        setUser(session.user);
-        setLoading(false);
+      try {
+        const { data: { session }, error } = await supabase().auth.getSession();
+        if (error) {
+          console.error("Error getting session:", error);
+          navigate('/login');
+        } else if (!session) {
+          navigate('/login');
+        } else {
+          setUser(session.user);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Unexpected error getting session:", err);
+        setLoading(false); // Stop loading anyway
       }
     };
     getUser();
