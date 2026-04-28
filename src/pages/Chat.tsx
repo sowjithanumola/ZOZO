@@ -37,7 +37,7 @@ export default function Chat() {
   };
 
   return (
-    <div className={`flex h-screen ${darkMode ? 'dark bg-zinc-950 text-zinc-50' : 'bg-white text-zinc-900'} font-sans`}>
+    <div className={`flex h-screen ${darkMode ? 'dark bg-zinc-950 text-zinc-50' : 'bg-white text-zinc-900'} font-sans`} style={{ backgroundColor: '#89c2f7' }}>
       {/* Sidebar */}
       <div className={`w-80 border-r ${darkMode ? 'border-zinc-800' : 'border-zinc-200'} flex flex-col p-4 gap-6`}>
         <div className="flex items-center gap-2 px-2">
