@@ -4,19 +4,54 @@ import { Send, Image as ImageIcon, Smile } from 'lucide-react';
 import ChatSkeleton from './ChatSkeleton';
 
 export default function ChatInterface({ selectedUser, currentUser, darkMode }: { selectedUser: any; currentUser: any; darkMode: boolean }) {
+  const [chatId, setChatId] = useState<number | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ... (keep useEffect for fetching and subscribing)
   useEffect(() => {
+    const initChat = async () => {
+      setLoading(true);
+      // Try to find chat
+      const { data: participants } = await supabase()
+        .from('chat_participants')
+        .select('chat_id')
+        .in('user_id', [currentUser.id, selectedUser.id]);
+        
+      // Count occurences of chat_id. If a chat_id appears twice, both are in it.
+      const chatCounts: Record<number, number> = {};
+      participants?.forEach(p => chatCounts[p.chat_id] = (chatCounts[p.chat_id] || 0) + 1);
+      
+      const existingChatId = Object.keys(chatCounts).find(id => chatCounts[Number(id)] >= 2);
+      
+      if (existingChatId) {
+        setChatId(Number(existingChatId));
+      } else {
+        // Simple create: insert new chat
+        const { data: newChat } = await supabase().from('chats').insert({ is_group: false }).select().single();
+        if (newChat) {
+          await supabase().from('chat_participants').insert([
+            { chat_id: newChat.id, user_id: currentUser.id },
+            { chat_id: newChat.id, user_id: selectedUser.id }
+          ]);
+          setChatId(newChat.id);
+        }
+      }
+      setLoading(false);
+    };
+    initChat();
+  }, [selectedUser, currentUser]);
+
+  useEffect(() => {
+    if (chatId === null) return;
+    
     const fetchMessages = async () => {
       try {
         const { data, error } = await supabase()
           .from('messages')
           .select('*')
-          .or(`sender_id.eq.${currentUser.id},sender_id.eq.${selectedUser.id}`)
+          .eq('chat_id', chatId)
           .order('created_at', { ascending: true });
         
         if (error) {
@@ -26,8 +61,6 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
         }
       } catch (e) {
         console.error('Unexpected error fetching messages:', e);
-      } finally {
-        setLoading(false);
       }
     };
     fetchMessages();
@@ -45,12 +78,8 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || chatId === null) return;
     
-    // NOTE: Hardcoded chat_id is likely causing the 409 Conflict error.
-    // In a real app, this should be the ID of the chat between currentUser and selectedUser.
-    const chatId = 1; 
-
     try {
       const { error } = await supabase().from('messages').insert({
         chat_id: chatId,
@@ -60,12 +89,7 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
 
       if (error) {
         console.error('Error sending message:', error);
-        // If it's a conflict, it might be due to a unique constraint violation or RLS.
-        if (error.code === '409') { // or check error.message
-          alert('Conflict error while sending message. Please check the chat setup.');
-        } else {
-          alert('Failed to send message: ' + error.message);
-        }
+        alert('Failed to send message: ' + error.message);
       } else {
         setNewMessage('');
       }
