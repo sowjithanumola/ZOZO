@@ -60,6 +60,7 @@ export default function Chat() {
            <button onClick={toggleTheme}>
              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
            </button>
+           <button className="text-xs font-bold text-zinc-500 hover:text-blue-500" title="Created by Sowjith Anumola (sowjith.anumola@gmail.com)">OA</button>
            <LogOut size={20} className="cursor-pointer hover:text-red-500" onClick={() => supabase().auth.signOut().then(() => navigate('/login'))}/>
         </div>
       </div>
