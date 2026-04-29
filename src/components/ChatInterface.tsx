@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { ChannelProvider, useChannel } from 'ably/react';
+import { useChannel } from 'ably/react';
 import { Send, Image as ImageIcon, Smile } from 'lucide-react';
 import ChatSkeleton from './ChatSkeleton';
 import EmojiPicker from 'emoji-picker-react';
@@ -92,9 +92,7 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   if (chatId === null) return <div className="flex-1 flex items-center justify-center text-zinc-500">Could not initialize chat.</div>;
 
   return (
-    <ChannelProvider channelName={`chat-${chatId}`}>
       <ChatContent key={chatId} chatId={chatId} messages={messages} setMessages={setMessages} selectedUser={selectedUser} currentUser={currentUser} darkMode={darkMode} messagesEndRef={messagesEndRef} bgClass={bgClass} borderClass={borderClass} textClass={textClass} />
-    </ChannelProvider>
   );
 }
 
@@ -104,6 +102,7 @@ function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser,
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { channel } = useChannel(`chat-${chatId}`, (message) => {
+     console.log('Received message:', message.data, 'Current chatId:', chatId);
      if (message.data.chat_id === chatId) {
         setMessages((prev: any) => [...prev, message.data]);
      }
