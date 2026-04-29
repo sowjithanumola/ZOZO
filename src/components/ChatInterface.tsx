@@ -143,21 +143,23 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   );
 }
 
+// Ably Message Isolation Fix: Using chat-v2 prefix and strict chatId filtering
 function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser, darkMode, messagesEndRef, borderClass, bgClass, textClass, loading }: any) {
   const [newMessage, setNewMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Subscription to a specific chat channel
   const { channel } = useChannel(`chat-v2-${chatId}`, (message) => {
-     console.log('Ably received for chatId:', chatId, message.data);
+     console.log('Ably message received:', message.data);
      
-     // STRICT CHECK: Ensure IDs match as strings to prevent any type-mismatch leaks
-     // and use a unique namespace (v2) to avoid collisions with old sessions
+     // Double-check the chat_id payload to prevent cross-chat leak
      if (String(message.data.chat_id) !== String(chatId)) {
         return;
      }
 
      setMessages((prev: any) => {
+        // Prevent duplicate messages
         if (prev.some((m: any) => String(m.id) === String(message.data.id))) return prev;
         return [...prev, message.data];
      });
@@ -274,14 +276,27 @@ function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser,
                   </span>
                 </div>
               )}
-              <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                <div className="flex flex-col gap-1 max-w-[75%] md:max-w-[60%]">
-                    <div className={`p-3 md:p-4 text-sm leading-relaxed ${isOwn ? msgOwnClass : msgOtherClass}`}>
+              <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300 px-1`}>
+                <div className="flex flex-col gap-1 max-w-[85%] md:max-w-[70%] lg:max-w-[60%]">
+                    <div className={`p-3 md:p-4 text-[15px] leading-relaxed relative ${isOwn ? msgOwnClass : msgOtherClass}`}>
                       {msg.content.startsWith('[FILE]: ') ? (
-                        <a href={msg.content.replace('[FILE]: ', '')} target="_blank" rel="noreferrer" className="flex items-center gap-2 underline break-all font-medium">
-                          <ImageIcon size={16} /> View Image
-                        </a>
-                      ) : msg.content}
+                        <div className="rounded-lg overflow-hidden">
+                          <img 
+                            src={msg.content.replace('[FILE]: ', '')} 
+                            alt="Sent" 
+                            className="max-w-full h-auto rounded-md shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => window.open(msg.content.replace('[FILE]: ', ''), '_blank')}
+                          />
+                        </div>
+                      ) : (
+                        <div className="break-words font-medium">{msg.content}</div>
+                      )}
+                      
+                      {isOwn && (
+                        <div className="flex justify-end mt-1">
+                          <div className="text-[9px] opacity-70 font-bold uppercase tracking-tighter">Sent</div>
+                        </div>
+                      )}
                     </div>
                 </div>
               </div>

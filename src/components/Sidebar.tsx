@@ -60,9 +60,8 @@ export default function Sidebar({ onSelectUser }: { onSelectUser: (user: any) =>
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline mb-0.5">
                   <div className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate">{user.name || 'Anonymous'}</div>
-                  <div className="text-[10px] text-zinc-500 font-medium whitespace-nowrap ml-2">12:45 PM</div>
                 </div>
-                <div className="text-xs text-zinc-500 truncate font-medium">Click to start chatting...</div>
+                <div className="text-xs text-zinc-500 truncate font-medium">Tap to open chat</div>
               </div>
               {/* Message indicator dot could go here */}
             </li>
