@@ -11,15 +11,11 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Setup Ably Channel
-  // useChannel automatically subscribes when mounted and cleans up on unmount.
-  const { channel } = useChannel(chatId ? `chat-${chatId}` : 'noop', (message) => {
-     setMessages((prev) => [...prev, message.data]);
-  });
-
   useEffect(() => {
     const initChat = async () => {
       setLoading(true);
+      setMessages([]);
+      setChatId(null);
       try {
         const { data: participants, error: pError } = await supabase()
           .from('chat_participants')
@@ -83,6 +79,23 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
+  const bgClass = darkMode ? 'bg-zinc-950' : 'bg-white';
+  const borderClass = darkMode ? 'border-zinc-800' : 'border-zinc-200';
+  const textClass = darkMode ? 'text-zinc-50' : 'text-zinc-900';
+  
+  if (loading) return <ChatSkeleton />;
+  if (chatId === null) return <div className="flex-1 flex items-center justify-center text-zinc-500">Could not initialize chat.</div>;
+
+  return <ChatContent key={chatId} chatId={chatId} messages={messages} setMessages={setMessages} selectedUser={selectedUser} currentUser={currentUser} darkMode={darkMode} messagesEndRef={messagesEndRef} bgClass={bgClass} borderClass={borderClass} textClass={textClass} />;
+}
+
+function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser, darkMode, messagesEndRef, bgClass, borderClass, textClass }: any) {
+  const [newMessage, setNewMessage] = useState('');
+  
+  const { channel } = useChannel(`chat-${chatId}`, (message) => {
+     setMessages((prev: any) => [...prev, message.data]);
+  });
+
   const sendMessage = async () => {
     if (!newMessage.trim() || chatId === null) return;
     
@@ -103,13 +116,10 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
         return;
     }
 
-    // Publish to Ably (Real-time) using useChannel hook channel
+    // Publish to Ably (Real-time)
     await channel.publish('new-message', newMsg);
   };
 
-  const bgClass = darkMode ? 'bg-zinc-950' : 'bg-white';
-  const borderClass = darkMode ? 'border-zinc-800' : 'border-zinc-200';
-  const textClass = darkMode ? 'text-zinc-50' : 'text-zinc-900';
   const msgOwnClass = 'bg-blue-600 text-white rounded-br-none';
   const msgOtherClass = darkMode ? 'bg-zinc-800 text-zinc-50 rounded-bl-none' : 'bg-zinc-200 text-zinc-900 rounded-bl-none';
   const inputBgClass = darkMode ? 'bg-zinc-900' : 'bg-zinc-100';
@@ -123,18 +133,16 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
       </div>
 
       {/* Messages */}
-      {loading ? <ChatSkeleton /> : (
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`flex ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[60%] p-4 rounded-3xl text-sm ${msg.sender_id === currentUser.id ? msgOwnClass : msgOtherClass}`}>
-                {msg.content}
-              </div>
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        {messages.map((msg: any) => (
+          <div key={msg.id} className={`flex ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[60%] p-4 rounded-3xl text-sm ${msg.sender_id === currentUser.id ? msgOwnClass : msgOtherClass}`}>
+              {msg.content}
             </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-      )}
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
 
       {/* Input */}
       <div className={`p-4 border-t ${borderClass} ${bgClass}`}>

@@ -8,14 +8,20 @@ import { AblyProvider } from 'ably/react';
 import Login from './pages/Login';
 import Chat from './pages/Chat';
 
-const ablyApiKey = import.meta.env.VITE_ABLY_API_KEY;
-console.log("DEBUG: Is VITE_ABLY_API_KEY found?", ablyApiKey ? "Yes, it is loaded" : "No, it is UNDEFINED");
+const apiKey = import.meta.env.VITE_ABLY_API_KEY;
 
-const ablyClient = new Ably.Realtime({ 
-  key: ablyApiKey 
-});
+// Only initialize if we have a key
+const ablyClient = apiKey ? new Ably.Realtime({ key: apiKey }) : null;
 
 export default function App() {
+  if (!ablyClient) {
+     return (
+       <div className="flex h-screen items-center justify-center p-4">
+         <p className="text-red-500">Configuration Error: VITE_ABLY_API_KEY is not defined.</p>
+       </div>
+     );
+  }
+
   return (
     <AblyProvider client={ablyClient}>
       <BrowserRouter>
