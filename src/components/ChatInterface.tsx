@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { ChannelProvider, useChannel } from 'ably/react';
 import { Send, Image as ImageIcon, Smile } from 'lucide-react';
 import ChatSkeleton from './ChatSkeleton';
+import EmojiPicker from 'emoji-picker-react';
 
 export default function ChatInterface({ selectedUser, currentUser, darkMode }: { selectedUser: any; currentUser: any; darkMode: boolean }) {
   const [chatId, setChatId] = useState<number | null>(null);
@@ -99,6 +100,7 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
 
 function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser, darkMode, messagesEndRef, bgClass, borderClass, textClass }: any) {
   const [newMessage, setNewMessage] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { channel } = useChannel(`chat-${chatId}`, (message) => {
@@ -108,8 +110,39 @@ function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser,
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      alert(`File selected (not yet uploading): ${file.name}`);
-      // TODO: Implement file upload to Supabase and send message with URL
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random()}.${fileExt}`;
+      const { data, error } = await supabase().storage
+        .from('chat-files')
+        .upload(fileName, file);
+
+      if (error) {
+        alert('Error uploading file: ' + error.message);
+        return;
+      }
+      
+      const { data: publicUrlData } = supabase().storage.from('chat-files').getPublicUrl(fileName);
+      
+      // Save to Supabase (Persistence)
+      const { data: newMsg, error: msgError } = await supabase().from('messages').insert({
+        chat_id: chatId,
+        sender_id: currentUser.id,
+        content: `[FILE]: ${publicUrlData.publicUrl}`,
+      }).select().single();
+
+      if (msgError) {
+        alert('Failed to send file message: ' + msgError.message);
+        return;
+      }
+      
+      // Publish to Ably (Real-time)
+      await channel.publish('new-message', newMsg);
+  };
+
+  const onEmojiClick = (emojiData: any) => {
+      setNewMessage(prev => prev + emojiData.emoji);
+      setShowEmojiPicker(false);
   };
 
   const sendMessage = async () => {
@@ -162,8 +195,13 @@ function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser,
 
       {/* Input */}
       <div className={`p-4 border-t ${borderClass} ${bgClass}`}>
+        {showEmojiPicker && (
+            <div className="absolute bottom-20 z-10">
+                <EmojiPicker onEmojiClick={onEmojiClick} />
+            </div>
+        )}
         <div className="relative flex items-center gap-2">
-            <button className="text-zinc-500 hover:text-zinc-200"><Smile /></button>
+            <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="text-zinc-500 hover:text-zinc-200"><Smile /></button>
             <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
             <button onClick={() => fileInputRef.current?.click()} className="text-zinc-500 hover:text-zinc-200"><ImageIcon /></button>
             <input 
