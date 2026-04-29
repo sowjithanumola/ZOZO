@@ -13,49 +13,55 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let isMounted = true;
     const initChat = async () => {
       if (!selectedUser?.id || !currentUser?.id) {
-        setLoading(false);
+        if (isMounted) setLoading(false);
         return;
       }
-      setLoading(true);
-      setMessages([]);
-      setChatId(null);
+      if (isMounted) {
+        setLoading(true);
+        setMessages([]);
+        setChatId(null);
+      }
       try {
         const { data: participants, error: pError } = await supabase()
           .from('chat_participants')
           .select('chat_id')
           .in('user_id', [currentUser.id, selectedUser.id]);
         
-        if (pError) console.error('Error fetching participants:', pError);
+        if (pError) throw pError;
 
         const chatCounts: Record<number, number> = {};
         participants?.forEach(p => chatCounts[p.chat_id] = (chatCounts[p.chat_id] || 0) + 1);
         
         const existingChatId = Object.keys(chatCounts).find(id => chatCounts[Number(id)] >= 2);
         
+        if (!isMounted) return;
+
         if (existingChatId) {
           setChatId(Number(existingChatId));
         } else {
           const { data: newChat, error: cError } = await supabase().from('chats').insert({ is_group: false }).select().single();
-          if (cError) {
-             console.error('Error creating chat:', cError);
-          } else if (newChat) {
+          if (cError) throw cError;
+          if (newChat) {
             const { error: p2Error } = await supabase().from('chat_participants').insert([
               { chat_id: newChat.id, user_id: currentUser.id },
               { chat_id: newChat.id, user_id: selectedUser.id }
             ]);
-            if (p2Error) console.error('Error creating participants:', p2Error);
+            if (p2Error) throw p2Error;
             setChatId(newChat.id);
           }
         }
       } catch (err) {
         console.error('Unexpected error in initChat:', err);
+        // Don't alert here to avoid annoying popups, but maybe set an error state
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     initChat();
+    return () => { isMounted = false; };
   }, [selectedUser, currentUser]);
 
   useEffect(() => {
@@ -117,9 +123,15 @@ function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser,
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Using useChannel without the name to automatically use the one from ChannelProvider
   const { channel } = useChannel(`chat-${chatId}`, (message) => {
-     console.log('Ably received:', message.data);
+     console.log('Ably received for chatId:', chatId, message.data);
+     
+     // STRICT CHECK: Only process messages for the active conversation
+     if (message.data.chat_id !== chatId) {
+        console.warn(`Ignoring message for chatId ${message.data.chat_id} (active: ${chatId})`);
+        return;
+     }
+
      setMessages((prev: any) => {
         // Prevent duplicates
         if (prev.some((m: any) => m.id === message.data.id)) return prev;
