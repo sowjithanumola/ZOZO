@@ -41,13 +41,21 @@ export default function Profile() {
     if (avatarFile) {
       const fileExt = avatarFile.name.split('.').pop();
       const fileName = `${user.id}.${fileExt}`;
-      const { error: uploadError } = await supabase().storage
+      const { data: uploadData, error: uploadError } = await supabase().storage
         .from('avatars')
         .upload(fileName, avatarFile, { upsert: true });
-      if (uploadError) { alert(uploadError.message); return; }
+        
+      if (uploadError) { 
+          console.error('Storage upload error:', uploadError);                
+          alert(`Error uploading photo: ${uploadError.message}`); 
+          return; 
+      }
+      
+      console.log('Upload success:', uploadData);
       
       const { data } = supabase().storage.from('avatars').getPublicUrl(fileName);
       avatar_url = data.publicUrl;
+      console.log('Public URL:', avatar_url);
     }
 
     const { error } = await supabase()

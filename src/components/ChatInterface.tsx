@@ -99,10 +99,18 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
 
 function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser, darkMode, messagesEndRef, bgClass, borderClass, textClass }: any) {
   const [newMessage, setNewMessage] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { channel } = useChannel(`chat-${chatId}`, (message) => {
      setMessages((prev: any) => [...prev, message.data]);
   });
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      alert(`File selected (not yet uploading): ${file.name}`);
+      // TODO: Implement file upload to Supabase and send message with URL
+  };
 
   const sendMessage = async () => {
     if (!newMessage.trim() || chatId === null) return;
@@ -156,7 +164,8 @@ function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser,
       <div className={`p-4 border-t ${borderClass} ${bgClass}`}>
         <div className="relative flex items-center gap-2">
             <button className="text-zinc-500 hover:text-zinc-200"><Smile /></button>
-            <button className="text-zinc-500 hover:text-zinc-200"><ImageIcon /></button>
+            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+            <button onClick={() => fileInputRef.current?.click()} className="text-zinc-500 hover:text-zinc-200"><ImageIcon /></button>
             <input 
               value={newMessage} 
               onChange={(e) => setNewMessage(e.target.value)}

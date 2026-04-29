@@ -57,7 +57,6 @@ export default function Chat() {
         
         <div className={`border-t ${darkMode ? 'border-zinc-800' : 'border-zinc-200'} pt-4 flex items-center justify-between`}>
            <User size={20} className="cursor-pointer hover:text-blue-500" onClick={() => setView('profile')}/>
-           <Settings size={20} className="cursor-pointer hover:text-blue-500" onClick={() => setView('settings')}/>
            <button onClick={toggleTheme}>
              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
            </button>
