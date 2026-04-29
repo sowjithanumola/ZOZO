@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { useChannel } from 'ably/react';
 import { Send, Image as ImageIcon, Smile } from 'lucide-react';
 import ChatSkeleton from './ChatSkeleton';
 
@@ -10,42 +11,56 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Setup Ably Channel
+  // useChannel automatically subscribes when mounted and cleans up on unmount.
+  const { channel } = useChannel(chatId ? `chat-${chatId}` : 'noop', (message) => {
+     setMessages((prev) => [...prev, message.data]);
+  });
+
   useEffect(() => {
     const initChat = async () => {
       setLoading(true);
-      // Try to find chat
-      const { data: participants } = await supabase()
-        .from('chat_participants')
-        .select('chat_id')
-        .in('user_id', [currentUser.id, selectedUser.id]);
+      try {
+        const { data: participants, error: pError } = await supabase()
+          .from('chat_participants')
+          .select('chat_id')
+          .in('user_id', [currentUser.id, selectedUser.id]);
         
-      // Count occurences of chat_id. If a chat_id appears twice, both are in it.
-      const chatCounts: Record<number, number> = {};
-      participants?.forEach(p => chatCounts[p.chat_id] = (chatCounts[p.chat_id] || 0) + 1);
-      
-      const existingChatId = Object.keys(chatCounts).find(id => chatCounts[Number(id)] >= 2);
-      
-      if (existingChatId) {
-        setChatId(Number(existingChatId));
-      } else {
-        // Simple create: insert new chat
-        const { data: newChat } = await supabase().from('chats').insert({ is_group: false }).select().single();
-        if (newChat) {
-          await supabase().from('chat_participants').insert([
-            { chat_id: newChat.id, user_id: currentUser.id },
-            { chat_id: newChat.id, user_id: selectedUser.id }
-          ]);
-          setChatId(newChat.id);
+        if (pError) console.error('Error fetching participants:', pError);
+
+        const chatCounts: Record<number, number> = {};
+        participants?.forEach(p => chatCounts[p.chat_id] = (chatCounts[p.chat_id] || 0) + 1);
+        
+        const existingChatId = Object.keys(chatCounts).find(id => chatCounts[Number(id)] >= 2);
+        
+        if (existingChatId) {
+          setChatId(Number(existingChatId));
+        } else {
+          const { data: newChat, error: cError } = await supabase().from('chats').insert({ is_group: false }).select().single();
+          if (cError) {
+             console.error('Error creating chat:', cError);
+          } else if (newChat) {
+            const { error: p2Error } = await supabase().from('chat_participants').insert([
+              { chat_id: newChat.id, user_id: currentUser.id },
+              { chat_id: newChat.id, user_id: selectedUser.id }
+            ]);
+            if (p2Error) console.error('Error creating participants:', p2Error);
+            setChatId(newChat.id);
+          }
         }
+      } catch (err) {
+        console.error('Unexpected error in initChat:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     initChat();
   }, [selectedUser, currentUser]);
 
   useEffect(() => {
     if (chatId === null) return;
-    
+
+    // Fetch historical messages from Supabase
     const fetchMessages = async () => {
       try {
         const { data, error } = await supabase()
@@ -64,44 +79,32 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
       }
     };
     fetchMessages();
-
-    const channel = supabase()
-      .channel('messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        setMessages((prev) => [...prev, payload.new]);
-      })
-      .subscribe();
-
-    return () => { supabase().removeChannel(channel); };
-  }, [selectedUser, currentUser]);
+  }, [chatId]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
-    if (chatId === null) {
-      console.log('Cannot send: chatId is null');
-      alert('Chat is still initializing, please wait a moment.');
-      return;
-    }
+    if (!newMessage.trim() || chatId === null) return;
     
-    try {
-      const { error } = await supabase().from('messages').insert({
+    const msgToSend = newMessage;
+    setNewMessage(''); // Optimistic update
+
+    // Save to Supabase (Persistence)
+    const { data: newMsg, error } = await supabase().from('messages').insert({
         chat_id: chatId,
         sender_id: currentUser.id,
-        content: newMessage,
-      });
+        content: msgToSend,
+    }).select().single();
 
-      if (error) {
-        console.error('Error sending message:', error);
+    if (error) {
+        console.error('Error saving message to database:', error);
         alert('Failed to send message: ' + error.message);
-      } else {
-        setNewMessage('');
-      }
-    } catch (e) {
-      console.error('Unexpected error sending message:', e);
-      alert('Unexpected error sending message');
+        setNewMessage(msgToSend); // Revert
+        return;
     }
+
+    // Publish to Ably (Real-time) using useChannel hook channel
+    await channel.publish('new-message', newMsg);
   };
 
   const bgClass = darkMode ? 'bg-zinc-950' : 'bg-white';
