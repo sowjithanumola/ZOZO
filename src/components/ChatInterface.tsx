@@ -104,7 +104,9 @@ function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser,
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { channel } = useChannel(`chat-${chatId}`, (message) => {
-     setMessages((prev: any) => [...prev, message.data]);
+     if (message.data.chat_id === chatId) {
+        setMessages((prev: any) => [...prev, message.data]);
+     }
   });
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
