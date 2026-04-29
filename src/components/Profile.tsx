@@ -18,7 +18,7 @@ export default function Profile() {
         .from('users')
         .select('*')
         .eq('id', user.id)
-        .maybeSingle(); // Use maybeSingle to avoid 406/PGRST116 errors
+        .maybeSingle(); 
       
       if (error) {
         console.error('Fetch profile error:', error);
@@ -28,34 +28,34 @@ export default function Profile() {
         setBio(data.bio || '');
         setWebsite(data.website || '');
         setGender(data.gender || 'Male');
+        setAvatarUrl(data.avatar_url || '');
       }
     }
     fetchProfile();
   }, []);
 
+  const [avatarUrl, setAvatarUrl] = useState('');
+
   const updateProfile = async () => {
     const { data: { user } } = await supabase().auth.getUser();
     if (!user) return;
 
-    let avatar_url = '';
+    let final_avatar_url = avatarUrl;
     if (avatarFile) {
       const fileExt = avatarFile.name.split('.').pop();
-      const fileName = `${user.id}.${fileExt}`;
-      const { data: uploadData, error: uploadError } = await supabase().storage
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase().storage
         .from('avatars')
         .upload(fileName, avatarFile, { upsert: true });
         
       if (uploadError) { 
-          console.error('Storage upload error:', uploadError);                
           alert(`Error uploading photo: ${uploadError.message}`); 
           return; 
       }
       
-      console.log('Upload success:', uploadData);
-      
       const { data } = supabase().storage.from('avatars').getPublicUrl(fileName);
-      avatar_url = data.publicUrl;
-      console.log('Public URL:', avatar_url);
+      final_avatar_url = data.publicUrl;
+      setAvatarUrl(final_avatar_url);
     }
 
     const { error } = await supabase()
@@ -67,57 +67,59 @@ export default function Profile() {
         bio, 
         website, 
         gender,
-        ...(avatar_url && { avatar_url }) 
+        avatar_url: final_avatar_url
       });
       
     if (error) {
-      console.error('Upsert error:', error); // Log full error object
-      alert(`Error updating profile: ${error.message} - ${error.details || ''}`);
+      alert(`Error updating profile: ${error.message}`);
     } else {
-      alert('Profile updated!');
+      alert('Profile updated successfully!');
     }
   };
 
   return (
-    <div className="bg-zinc-900 rounded-3xl border border-zinc-800 p-8 space-y-8">
-      <h2 className="text-3xl font-bold text-zinc-50">Edit profile</h2>
+    <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] p-8 shadow-2xl border border-zinc-200 dark:border-zinc-800 space-y-10 max-w-xl mx-auto animate-in fade-in zoom-in-95 duration-500">
+      <div className="text-center space-y-2">
+        <h2 className="text-4xl font-black text-zinc-900 dark:text-zinc-50 tracking-tight">Profile</h2>
+        <p className="text-zinc-500 font-medium">Customize how others see you on ZOZO</p>
+      </div>
       
       {/* Avatar Section */}
-      <div className="bg-zinc-950 p-6 rounded-2xl flex items-center justify-between border border-zinc-800">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-zinc-700"></div>
-          <div>
-            <div className="font-bold text-zinc-50">{username || 'Username'}</div>
-            <div className="text-zinc-400">{name || 'Full Name'}</div>
-          </div>
+      <div className="flex flex-col items-center gap-6">
+        <div className="relative group">
+          <img 
+            src={avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'A')}&background=random&size=256`} 
+            className="w-32 h-32 rounded-full object-cover ring-4 ring-blue-500/20 group-hover:ring-blue-500/40 transition-all duration-300"
+            alt="Profile Avatar"
+          />
+          <input type="file" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} className="hidden" id="photo-upload" />
+          <label htmlFor="photo-upload" className="absolute bottom-1 right-1 p-2.5 bg-blue-600 text-white rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+          </label>
         </div>
-        <input type="file" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} className="hidden" id="photo-upload" />
-        <label htmlFor="photo-upload" className="px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 cursor-pointer transition-colors text-sm">Change photo</label>
+        {avatarFile && <p className="text-xs font-bold text-blue-500 animate-pulse">New photo selected: {avatarFile.name}</p>}
       </div>
 
-      {/* Basic Info */}
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <label className="font-semibold text-zinc-50">Username</label>
-          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-4 bg-zinc-950 border border-zinc-700 rounded-2xl outline-none focus:ring-1 focus:ring-zinc-600 text-zinc-200" placeholder="your_username" />
+          <label className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-2">Username</label>
+          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium transition-all" placeholder="username" />
         </div>
         <div className="space-y-2">
-          <label className="font-semibold text-zinc-50">Name</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full p-4 bg-zinc-950 border border-zinc-700 rounded-2xl outline-none focus:ring-1 focus:ring-zinc-600 text-zinc-200" placeholder="Your Name" />
+          <label className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-2">Full Name</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium transition-all" placeholder="Full Name" />
         </div>
       </div>
 
-      {/* Bio */}
       <div className="space-y-2">
-        <label className="font-semibold text-zinc-50">Bio</label>
-        <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="w-full p-4 bg-zinc-950 border border-zinc-700 rounded-2xl outline-none focus:ring-1 focus:ring-zinc-600 text-zinc-200 h-32" placeholder="Tell us about yourself..." maxLength={150}></textarea>
-        <div className="text-right text-sm text-zinc-500">{bio.length} / 150</div>
+        <label className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-2">Bio</label>
+        <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="w-full p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium h-24 resize-none transition-all" placeholder="A little about yourself..." maxLength={150}></textarea>
+        <div className="text-right text-[10px] font-bold text-zinc-400 px-2">{bio.length} / 150 CHARACTERS</div>
       </div>
 
-      {/* Gender */}
       <div className="space-y-2">
-        <label className="font-semibold text-zinc-50">Gender</label>
-        <select value={gender} onChange={(e) => setGender(e.target.value)} className="w-full p-4 bg-zinc-950 border border-zinc-700 rounded-2xl outline-none focus:ring-1 focus:ring-zinc-600 text-zinc-200">
+        <label className="text-xs font-black uppercase tracking-widest text-zinc-400 ml-2">Gender</label>
+        <select value={gender} onChange={(e) => setGender(e.target.value)} className="w-full p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium transition-all appearance-none cursor-pointer">
           <option>Male</option>
           <option>Female</option>
           <option>Other</option>
@@ -125,7 +127,7 @@ export default function Profile() {
         </select>
       </div>
 
-      <button onClick={updateProfile} className="w-full py-4 bg-zinc-50 text-zinc-950 font-bold rounded-2xl hover:bg-zinc-200 transition-colors">Save Profile</button>
+      <button onClick={updateProfile} className="w-full py-5 bg-blue-600 text-white font-black rounded-[1.5rem] hover:bg-blue-700 shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all tracking-widest uppercase text-sm">Save Changes</button>
     </div>
   );
 }

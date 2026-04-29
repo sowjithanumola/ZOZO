@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { ChannelProvider, useChannel } from 'ably/react';
-import { Send, Image as ImageIcon, Smile } from 'lucide-react';
+import { Send, Image as ImageIcon, Smile, MessageSquareCode } from 'lucide-react';
 import ChatSkeleton from './ChatSkeleton';
 import EmojiPicker from 'emoji-picker-react';
 
@@ -25,41 +25,65 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
         setChatId(null);
       }
       try {
-        const { data: participants, error: pError } = await supabase()
+        // Find private chats (is_group = false) where BOTH users are participants
+        // This is a more robust check to prevent sending messages to the wrong person/group
+        const { data: commonChats, error: cError } = await supabase()
           .from('chat_participants')
-          .select('chat_id')
-          .in('user_id', [currentUser.id, selectedUser.id]);
+          .select(`
+            chat_id,
+            chats!inner(is_group)
+          `)
+          .in('user_id', [currentUser.id, selectedUser.id])
+          .eq('chats.is_group', false);
         
-        if (pError) throw pError;
+        if (cError) throw cError;
 
+        // Group results by chat_id and count how many of OUR targeted users are in each
         const chatCounts: Record<number, number> = {};
-        participants?.forEach(p => chatCounts[p.chat_id] = (chatCounts[p.chat_id] || 0) + 1);
+        commonChats?.forEach(p => chatCounts[p.chat_id] = (chatCounts[p.chat_id] || 0) + 1);
         
-        const existingChatId = Object.keys(chatCounts).find(id => chatCounts[Number(id)] >= 2);
+        // Find a chat where both currentUser and selectedUser are present
+        const existingChatIdStr = Object.keys(chatCounts).find(id => chatCounts[Number(id)] >= 2);
         
         if (!isMounted) return;
 
-        if (existingChatId) {
-          setChatId(Number(existingChatId));
-        } else {
-          const { data: newChat, error: cError } = await supabase().from('chats').insert({ is_group: false }).select().single();
-          if (cError) throw cError;
-          if (newChat) {
-            const { error: p2Error } = await supabase().from('chat_participants').insert([
-              { chat_id: newChat.id, user_id: currentUser.id },
-              { chat_id: newChat.id, user_id: selectedUser.id }
-            ]);
-            if (p2Error) throw p2Error;
-            setChatId(newChat.id);
+        if (existingChatIdStr) {
+          const cid = Number(existingChatIdStr);
+          // Verify this chat ONLY has these 2 people to be super safe
+          const { count, error: countErr } = await supabase()
+            .from('chat_participants')
+            .select('*', { count: 'exact', head: true })
+            .eq('chat_id', cid);
+          
+          if (!countErr && count === 2) {
+             setChatId(cid);
+          } else {
+             // If the found chat has more than 2 people, it's not a private chat, so we create one
+             await createNewPrivateChat();
           }
+        } else {
+          await createNewPrivateChat();
         }
       } catch (err) {
         console.error('Unexpected error in initChat:', err);
-        // Don't alert here to avoid annoying popups, but maybe set an error state
       } finally {
         if (isMounted) setLoading(false);
       }
     };
+
+    const createNewPrivateChat = async () => {
+      const { data: newChat, error: c2Error } = await supabase().from('chats').insert({ is_group: false }).select().single();
+      if (c2Error) throw c2Error;
+      if (newChat) {
+        const { error: p2Error } = await supabase().from('chat_participants').insert([
+          { chat_id: newChat.id, user_id: currentUser.id },
+          { chat_id: newChat.id, user_id: selectedUser.id }
+        ]);
+        if (p2Error) throw p2Error;
+        if (isMounted) setChatId(newChat.id);
+      }
+    };
+
     initChat();
     return () => { isMounted = false; };
   }, [selectedUser, currentUser]);
@@ -99,7 +123,7 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
 
   return (
     <div className={`flex flex-col h-full ${bgClass} ${textClass}`}>
-      <ChannelProvider channelName={`chat-${chatId}`}>
+      <ChannelProvider channelName={`chat-v2-${chatId}`}>
         <ChatContent 
           key={chatId} 
           chatId={chatId} 
@@ -112,29 +136,29 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
           borderClass={borderClass} 
           bgClass={bgClass}
           textClass={textClass}
+          loading={loading}
         />
       </ChannelProvider>
     </div>
   );
 }
 
-function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser, darkMode, messagesEndRef, borderClass, bgClass, textClass }: any) {
+function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser, darkMode, messagesEndRef, borderClass, bgClass, textClass, loading }: any) {
   const [newMessage, setNewMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const { channel } = useChannel(`chat-${chatId}`, (message) => {
+  const { channel } = useChannel(`chat-v2-${chatId}`, (message) => {
      console.log('Ably received for chatId:', chatId, message.data);
      
-     // STRICT CHECK: Only process messages for the active conversation
-     if (message.data.chat_id !== chatId) {
-        console.warn(`Ignoring message for chatId ${message.data.chat_id} (active: ${chatId})`);
+     // STRICT CHECK: Ensure IDs match as strings to prevent any type-mismatch leaks
+     // and use a unique namespace (v2) to avoid collisions with old sessions
+     if (String(message.data.chat_id) !== String(chatId)) {
         return;
      }
 
      setMessages((prev: any) => {
-        // Prevent duplicates
-        if (prev.some((m: any) => m.id === message.data.id)) return prev;
+        if (prev.some((m: any) => String(m.id) === String(message.data.id))) return prev;
         return [...prev, message.data];
      });
   });
@@ -201,53 +225,118 @@ function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser,
     await channel.publish('new-message', newMsg);
   };
 
-  const msgOwnClass = 'bg-blue-600 text-white rounded-br-none';
-  const msgOtherClass = darkMode ? 'bg-zinc-800 text-zinc-50 rounded-bl-none' : 'bg-zinc-200 text-zinc-900 rounded-bl-none';
-  const inputBgClass = darkMode ? 'bg-zinc-900' : 'bg-zinc-100';
+  const msgOwnClass = 'bg-blue-500 text-white rounded-2xl rounded-tr-none shadow-sm';
+  const msgOtherClass = darkMode ? 'bg-zinc-800 text-zinc-100 rounded-2xl rounded-tl-none shadow-sm' : 'bg-white text-zinc-900 border border-zinc-200 rounded-2xl rounded-tl-none shadow-sm';
+  const inputBgClass = darkMode ? 'bg-zinc-900' : 'bg-white';
 
   return (
-    <div className={`flex flex-col h-full ${bgClass} ${textClass}`}>
+    <div className={`flex flex-col h-full ${bgClass} ${textClass} relative overflow-hidden shadow-2xl`}>
       {/* Header */}
-      <div className={`p-4 border-b ${borderClass} flex items-center gap-3`}>
-        <div className="w-10 h-10 rounded-full bg-zinc-700"></div>
-        <div className="font-semibold">{selectedUser.name}</div>
+      <div className={`p-4 border-b ${borderClass} flex items-center justify-between bg-opacity-90 backdrop-blur-md sticky top-0 z-10`}>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <img 
+              src={selectedUser.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.name || 'A')}&background=random`} 
+              alt={selectedUser.name} 
+              className="w-10 h-10 rounded-full object-cover border-2 border-blue-500"
+            />
+          </div>
+          <div>
+            <div className="font-bold text-sm tracking-tight">{selectedUser.name}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 text-zinc-400">
+           {/* Add dummy icons for completeness */}
+           <div className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer">
+             <span className="text-lg">⋮</span>
+           </div>
+        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {messages.map((msg: any) => (
-          <div key={msg.id} className={`flex ${msg.sender_id === currentUser.id ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[60%] p-4 rounded-3xl text-sm ${msg.sender_id === currentUser.id ? msgOwnClass : msgOtherClass}`}>
-              {msg.content}
-            </div>
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 bg-opacity-50" style={{ backgroundImage: darkMode ? 'radial-gradient(circle at 2px 2px, #18181b 1px, transparent 0)' : 'radial-gradient(circle at 2px 2px, #f4f4f5 1px, transparent 0)', backgroundSize: '24px 24px' }}>
+        {messages.length === 0 && !loading && (
+          <div className="flex flex-col items-center justify-center h-full opacity-20 transform scale-90">
+             <MessageSquareCode size={80} />
+             <p className="mt-4 font-medium text-lg">No messages yet</p>
           </div>
-        ))}
+        )}
+        {messages.map((msg: any, idx: number) => {
+          const isOwn = msg.sender_id === currentUser.id;
+          const showTime = idx === 0 || new Date(msg.created_at).getTime() - new Date(messages[idx-1].created_at).getTime() > 300000;
+          
+          return (
+            <div key={msg.id} className="space-y-1">
+              {showTime && (
+                <div className="flex justify-center my-4">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest px-3 py-1 bg-zinc-100 dark:bg-zinc-900 rounded-full border border-zinc-200 dark:border-zinc-800">
+                    {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
+              <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                <div className="flex flex-col gap-1 max-w-[75%] md:max-w-[60%]">
+                    <div className={`p-3 md:p-4 text-sm leading-relaxed ${isOwn ? msgOwnClass : msgOtherClass}`}>
+                      {msg.content.startsWith('[FILE]: ') ? (
+                        <a href={msg.content.replace('[FILE]: ', '')} target="_blank" rel="noreferrer" className="flex items-center gap-2 underline break-all font-medium">
+                          <ImageIcon size={16} /> View Image
+                        </a>
+                      ) : msg.content}
+                    </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <div className={`p-4 border-t ${borderClass} ${bgClass}`}>
+      <div className={`p-4 border-t ${borderClass} ${bgClass} relative`}>
         {showEmojiPicker && (
-            <div className="absolute bottom-20 z-10">
-                <EmojiPicker onEmojiClick={onEmojiClick} />
+            <div className="absolute bottom-full left-4 z-50 mb-2 shadow-2xl rounded-2xl overflow-hidden ring-1 ring-black/5 animate-in slide-in-from-bottom-5">
+                <EmojiPicker 
+                    onEmojiClick={onEmojiClick} 
+                    theme={darkMode ? 'dark' : 'light' as any}
+                    width={320}
+                    height={400}
+                />
             </div>
         )}
-        <div className="relative flex items-center gap-2">
-            <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="text-zinc-500 hover:text-zinc-200"><Smile /></button>
-            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-            <button onClick={() => fileInputRef.current?.click()} className="text-zinc-500 hover:text-zinc-200"><ImageIcon /></button>
-            <input 
+        <div className="max-w-4xl mx-auto flex items-end gap-2 bg-zinc-100 dark:bg-zinc-900/50 p-2 rounded-3xl border border-zinc-200 dark:border-zinc-800/50">
+            <div className="flex gap-1 p-1">
+                <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-2 text-zinc-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all">
+                  <Smile size={20} />
+                </button>
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                <button onClick={() => fileInputRef.current?.click()} className="p-2 text-zinc-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all">
+                  <ImageIcon size={20} />
+                </button>
+            </div>
+            <textarea 
+              rows={1}
               value={newMessage} 
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(e) => {
+                setNewMessage(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
                   sendMessage();
                 }
               }}
-              className={`flex-1 ${inputBgClass} border ${borderClass} rounded-full px-5 py-3 text-sm outline-none focus:ring-1 focus:ring-blue-500`}
-              placeholder="Message..."
+              className={`flex-1 bg-transparent border-none py-3 text-sm outline-none resize-none max-h-32 px-2`}
+              placeholder="Type a message..."
             />
-            <button onClick={sendMessage} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"><Send size={18} /></button>
+            <button 
+              onClick={sendMessage} 
+              disabled={!newMessage.trim()}
+              className={`p-3 rounded-2xl transition-all shadow-lg ${newMessage.trim() ? 'bg-blue-600 text-white hover:scale-105 active:scale-95 shadow-blue-500/20' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed'}`}
+            >
+              <Send size={18} />
+            </button>
         </div>
       </div>
     </div>
