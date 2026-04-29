@@ -13,6 +13,10 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
 
   useEffect(() => {
     const initChat = async () => {
+      if (!selectedUser?.id || !currentUser?.id) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       setMessages([]);
       setChatId(null);
