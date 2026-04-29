@@ -10,8 +10,10 @@ import Chat from './pages/Chat';
 
 const apiKey = import.meta.env.VITE_ABLY_API_KEY;
 
-// Only initialize if we have a key
-const ablyClient = apiKey ? new Ably.Realtime({ key: apiKey }) : null;
+// Only initialize if we have a valid-looking key
+const ablyClient = (apiKey && typeof apiKey === 'string' && apiKey.length > 5) 
+  ? new Ably.Realtime({ key: apiKey }) 
+  : null;
 
 export default function App() {
   if (!ablyClient) {

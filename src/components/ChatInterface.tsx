@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { useChannel } from 'ably/react';
+import { ChannelProvider, useChannel } from 'ably/react';
 import { Send, Image as ImageIcon, Smile } from 'lucide-react';
 import ChatSkeleton from './ChatSkeleton';
 import EmojiPicker from 'emoji-picker-react';
@@ -89,23 +89,42 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   const textClass = darkMode ? 'text-zinc-50' : 'text-zinc-900';
   
   if (loading) return <ChatSkeleton />;
-  if (chatId === null) return <div className="flex-1 flex items-center justify-center text-zinc-500">Could not initialize chat.</div>;
+  if (chatId === null) return <div className="flex-1 flex items-center justify-center text-zinc-500">Select a user to start chatting.</div>;
 
   return (
-      <ChatContent key={chatId} chatId={chatId} messages={messages} setMessages={setMessages} selectedUser={selectedUser} currentUser={currentUser} darkMode={darkMode} messagesEndRef={messagesEndRef} bgClass={bgClass} borderClass={borderClass} textClass={textClass} />
+    <div className={`flex flex-col h-full ${bgClass} ${textClass}`}>
+      <ChannelProvider channelName={`chat-${chatId}`}>
+        <ChatContent 
+          key={chatId} 
+          chatId={chatId} 
+          messages={messages} 
+          setMessages={setMessages} 
+          selectedUser={selectedUser} 
+          currentUser={currentUser} 
+          darkMode={darkMode} 
+          messagesEndRef={messagesEndRef} 
+          borderClass={borderClass} 
+          bgClass={bgClass}
+          textClass={textClass}
+        />
+      </ChannelProvider>
+    </div>
   );
 }
 
-function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser, darkMode, messagesEndRef, bgClass, borderClass, textClass }: any) {
+function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser, darkMode, messagesEndRef, borderClass, bgClass, textClass }: any) {
   const [newMessage, setNewMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Using useChannel without the name to automatically use the one from ChannelProvider
   const { channel } = useChannel(`chat-${chatId}`, (message) => {
-     console.log('Received message:', message.data, 'Current chatId:', chatId);
-     if (message.data.chat_id === chatId) {
-        setMessages((prev: any) => [...prev, message.data]);
-     }
+     console.log('Ably received:', message.data);
+     setMessages((prev: any) => {
+        // Prevent duplicates
+        if (prev.some((m: any) => m.id === message.data.id)) return prev;
+        return [...prev, message.data];
+     });
   });
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
