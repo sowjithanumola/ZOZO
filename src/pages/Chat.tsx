@@ -69,7 +69,7 @@ export default function Chat() {
       <div className={`flex-1 flex flex-col ${darkMode ? 'bg-zinc-950' : 'bg-zinc-50'} overflow-y-auto`}>
           {view === 'profile' ? <div className="p-8 max-w-2xl w-full mx-auto"><Profile /></div> :
            view === 'settings' ? <div className="p-8 text-xl font-bold">Settings (Coming Soon)</div> :
-           selectedUser ? <ChatInterface selectedUser={selectedUser} currentUser={user} darkMode={darkMode} /> :
+           selectedUser ? <ChatInterface key={selectedUser.id} selectedUser={selectedUser} currentUser={user} darkMode={darkMode} /> :
            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center opacity-60">
                 <MessageSquareCode size={64} className="mb-4" />
                 <h2 className="text-2xl font-bold mb-2">Fast. Private. Simple. ZOZO.</h2>

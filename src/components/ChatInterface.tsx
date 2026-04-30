@@ -50,9 +50,12 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
           chatParticipants[Number(id)].has(selectedUser.id)
         );
         
+        console.log('DEBUG: initChat', { currentUser: currentUser?.id, selectedUser: selectedUser?.id, existingChatId, allChats: chatParticipants });
+
         if (!isMounted) return;
 
         if (existingChatId) {
+          console.log('DEBUG: initChat found existing chat', existingChatId);
           const cid = Number(existingChatId);
           // Verify this chat ONLY has these 2 people to be super safe
           const { count, error: countErr } = await supabase()
@@ -63,28 +66,32 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
           if (!countErr && count === 2) {
              setChatId(cid);
           } else {
-             // If the found chat has more than 2 people, it's not a private chat, so we create one
+             console.log('DEBUG: initChat existing chat not private or wrong count, creating new');
              await createNewPrivateChat();
           }
         } else {
+          console.log('DEBUG: initChat no existing chat, creating new');
           await createNewPrivateChat();
         }
       } catch (err) {
         console.error('Unexpected error in initChat:', err);
       } finally {
+        console.log('DEBUG: initChat finished loading');
         if (isMounted) setLoading(false);
       }
     };
 
     const createNewPrivateChat = async () => {
+      console.log('DEBUG: createNewPrivateChat');
       const { data: newChat, error: c2Error } = await supabase().from('chats').insert({ is_group: false }).select().single();
-      if (c2Error) throw c2Error;
+      if (c2Error) { console.error('DEBUG: createNewPrivateChat error', c2Error); throw c2Error; }
       if (newChat) {
         const { error: p2Error } = await supabase().from('chat_participants').insert([
           { chat_id: newChat.id, user_id: currentUser.id },
           { chat_id: newChat.id, user_id: selectedUser.id }
         ]);
-        if (p2Error) throw p2Error;
+        if (p2Error) { console.error('DEBUG: createNewPrivateChat p error', p2Error); throw p2Error; }
+        console.log('DEBUG: createNewPrivateChat created', newChat.id);
         if (isMounted) setChatId(newChat.id);
       }
     };
