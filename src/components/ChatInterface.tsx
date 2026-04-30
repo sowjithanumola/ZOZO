@@ -25,52 +25,44 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
         setChatId(null);
       }
       try {
-        // Find private chats (is_group = false) where BOTH users are participants
-        const { data: commonChats, error: cError } = await supabase()
-          .from('chat_participants')
-          .select(`
-            chat_id,
-            user_id,
-            chats!inner(is_group)
-          `)
-          .eq('chats.is_group', false); // Get all private chats
+        // Find chats where BOTH users are participants
+        const [
+          { data: chats1, error: e1 }, 
+          { data: chats2, error: e2 }
+        ] = await Promise.all([
+          supabase().from('chat_participants').select('chat_id').eq('user_id', currentUser.id),
+          supabase().from('chat_participants').select('chat_id').eq('user_id', selectedUser.id)
+        ]);
 
-        if (cError) throw cError;
+        if (e1 || e2) throw e1 || e2;
 
-        // Group chats by ID and find one that contains both users
-        const chatParticipants: Record<number, Set<string>> = {};
-        commonChats?.forEach(p => {
-          if (!chatParticipants[p.chat_id]) chatParticipants[p.chat_id] = new Set();
-          chatParticipants[p.chat_id].add(p.user_id);
-        });
-
-        // Find a chat where both currentUser and selectedUser are present
-        const existingChatId = Object.keys(chatParticipants).find(id => 
-          chatParticipants[Number(id)].has(currentUser.id) && 
-          chatParticipants[Number(id)].has(selectedUser.id)
-        );
+        const chatIds1 = new Set(chats1?.map(c => c.chat_id) || []);
+        const commonChatIds = chats2?.filter(c => chatIds1.has(c.chat_id)).map(c => c.chat_id) || [];
         
-        console.log('DEBUG: initChat', { currentUser: currentUser?.id, selectedUser: selectedUser?.id, existingChatId, allChats: chatParticipants });
+        let existingChatId: number | null = null;
+        
+        // From common chats, find one that is NOT a group chat and has exactly 2 participants
+        for (const cid of commonChatIds) {
+           const { data: chat } = await supabase().from('chats').select('is_group').eq('id', cid).single();
+           if (chat && chat.is_group === false) {
+             const { count } = await supabase()
+              .from('chat_participants')
+              .select('*', { count: 'exact', head: true })
+              .eq('chat_id', cid);
+             if (count === 2) {
+               existingChatId = cid;
+               break;
+             }
+           }
+        }
+        
+        console.log('DEBUG: initChat detected:', { existingChatId });
 
         if (!isMounted) return;
 
         if (existingChatId) {
-          console.log('DEBUG: initChat found existing chat', existingChatId);
-          const cid = Number(existingChatId);
-          // Verify this chat ONLY has these 2 people to be super safe
-          const { count, error: countErr } = await supabase()
-            .from('chat_participants')
-            .select('*', { count: 'exact', head: true })
-            .eq('chat_id', cid);
-          
-          if (!countErr && count === 2) {
-             setChatId(cid);
-          } else {
-             console.log('DEBUG: initChat existing chat not private or wrong count, creating new');
-             await createNewPrivateChat();
-          }
+          setChatId(existingChatId);
         } else {
-          console.log('DEBUG: initChat no existing chat, creating new');
           await createNewPrivateChat();
         }
       } catch (err) {
@@ -131,7 +123,7 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   const textClass = darkMode ? 'text-zinc-50' : 'text-zinc-900';
   
   if (loading) return <ChatSkeleton />;
-  if (chatId === null) return <div className="flex-1 flex items-center justify-center text-zinc-500">Select a user to start chatting.</div>;
+  if (chatId === null) return <div className="flex-1 flex items-center justify-center text-zinc-500">Could not initialize chat. Please try again.</div>;
 
   return (
     <div className={`flex flex-col h-full ${bgClass} ${textClass}`}>
