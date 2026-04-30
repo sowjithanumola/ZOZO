@@ -26,29 +26,34 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
       }
       try {
         // Find private chats (is_group = false) where BOTH users are participants
-        // This is a more robust check to prevent sending messages to the wrong person/group
         const { data: commonChats, error: cError } = await supabase()
           .from('chat_participants')
           .select(`
             chat_id,
+            user_id,
             chats!inner(is_group)
           `)
-          .in('user_id', [currentUser.id, selectedUser.id])
-          .eq('chats.is_group', false);
-        
+          .eq('chats.is_group', false); // Get all private chats
+
         if (cError) throw cError;
 
-        // Group results by chat_id and count how many of OUR targeted users are in each
-        const chatCounts: Record<number, number> = {};
-        commonChats?.forEach(p => chatCounts[p.chat_id] = (chatCounts[p.chat_id] || 0) + 1);
-        
+        // Group chats by ID and find one that contains both users
+        const chatParticipants: Record<number, Set<string>> = {};
+        commonChats?.forEach(p => {
+          if (!chatParticipants[p.chat_id]) chatParticipants[p.chat_id] = new Set();
+          chatParticipants[p.chat_id].add(p.user_id);
+        });
+
         // Find a chat where both currentUser and selectedUser are present
-        const existingChatIdStr = Object.keys(chatCounts).find(id => chatCounts[Number(id)] >= 2);
+        const existingChatId = Object.keys(chatParticipants).find(id => 
+          chatParticipants[Number(id)].has(currentUser.id) && 
+          chatParticipants[Number(id)].has(selectedUser.id)
+        );
         
         if (!isMounted) return;
 
-        if (existingChatIdStr) {
-          const cid = Number(existingChatIdStr);
+        if (existingChatId) {
+          const cid = Number(existingChatId);
           // Verify this chat ONLY has these 2 people to be super safe
           const { count, error: countErr } = await supabase()
             .from('chat_participants')
@@ -123,7 +128,7 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
 
   return (
     <div className={`flex flex-col h-full ${bgClass} ${textClass}`}>
-      <ChannelProvider channelName={`chat-v2-${chatId}`}>
+      <ChannelProvider channelName={`chat-v10-${chatId}`}>
         <ChatContent 
           key={chatId} 
           chatId={chatId} 
@@ -143,23 +148,25 @@ export default function ChatInterface({ selectedUser, currentUser, darkMode }: {
   );
 }
 
-// Ably Message Isolation Fix: Using chat-v2 prefix and strict chatId filtering
+// Ably Message Isolation Fix: Using ChannelProvider with unique chatId and strict filtering
 function ChatContent({ chatId, messages, setMessages, selectedUser, currentUser, darkMode, messagesEndRef, borderClass, bgClass, textClass, loading }: any) {
   const [newMessage, setNewMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Subscription to a specific chat channel
-  const { channel } = useChannel(`chat-v2-${chatId}`, (message) => {
-     console.log('Ably message received:', message.data);
+  // Subscription to a unique channel for THIS specific chat ID
+  // This ensures that even if user names or IDs are somehow ambiguous, the DB chat ID separates them
+  const { channel } = useChannel(`chat-v10-${chatId}`, (message) => {
+     console.log(`[Chat-${chatId}] Real-time message received:`, message.data);
      
-     // Double-check the chat_id payload to prevent cross-chat leak
-     if (String(message.data.chat_id) !== String(chatId)) {
+     // CRITICAL: Prevent processing messages from a different chat or deleted ones
+     if (!message.data || String(message.data.chat_id) !== String(chatId)) {
+        console.warn(`[Chat-${chatId}] Message discarded - wrong chat_id:`, message.data?.chat_id);
         return;
      }
 
      setMessages((prev: any) => {
-        // Prevent duplicate messages
+        // Prevent duplicate messages (very common in real-time)
         if (prev.some((m: any) => String(m.id) === String(message.data.id))) return prev;
         return [...prev, message.data];
      });
