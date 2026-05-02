@@ -8,14 +8,37 @@ import EmojiPicker from 'emoji-picker-react';
 export default function CommunityChat({ currentUser, darkMode }: { currentUser: any; darkMode: boolean }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [communityChatId, setCommunityChatId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fetchMessages = async () => {
+    const initChat = async () => {
       try {
+        // Find or create "Crazy Souls" room
+        let { data: chat, error: fetchError } = await supabase()
+            .from('chats')
+            .select('id')
+            .eq('name', 'Crazy Souls')
+            .maybeSingle();
+        
+        let targetChatId = chat?.id;
+
+        if (!targetChatId) {
+            const { data: newChat, error: createError } = await supabase()
+                .from('chats')
+                .insert({ name: 'Crazy Souls', is_group: true })
+                .select()
+                .single();
+            if (createError) throw createError;
+            targetChatId = newChat.id;
+        }
+        
+        setCommunityChatId(targetChatId);
+
         const { data, error } = await supabase()
           .from('messages')
           .select('*')
+          .eq('chat_id', targetChatId)
           .order('created_at', { ascending: true });
         
         if (error) {
@@ -24,12 +47,12 @@ export default function CommunityChat({ currentUser, darkMode }: { currentUser: 
           setMessages(data);
         }
       } catch (e) {
-        console.error('Unexpected error fetching messages:', e);
+        console.error('Unexpected error init chat:', e);
       } finally {
         setLoading(false);
       }
     };
-    fetchMessages();
+    initChat();
   }, []);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -47,14 +70,15 @@ export default function CommunityChat({ currentUser, darkMode }: { currentUser: 
           setMessages={setMessages} 
           currentUser={currentUser} 
           darkMode={darkMode} 
-          messagesEndRef={messagesEndRef} 
+          messagesEndRef={messagesEndRef}
+          communityChatId={communityChatId}
         />
       </ChannelProvider>
     </div>
   );
 }
 
-function ChatContent({ messages, setMessages, currentUser, darkMode, messagesEndRef }: any) {
+function ChatContent({ messages, setMessages, currentUser, darkMode, messagesEndRef, communityChatId }: any) {
   const [newMessage, setNewMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -67,7 +91,7 @@ function ChatContent({ messages, setMessages, currentUser, darkMode, messagesEnd
   });
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !communityChatId) return;
     
     const msgToSend = newMessage;
     setNewMessage('');
@@ -75,6 +99,7 @@ function ChatContent({ messages, setMessages, currentUser, darkMode, messagesEnd
     const { data: newMsg, error } = await supabase().from('messages').insert({
         sender_id: currentUser.id,
         content: msgToSend,
+        chat_id: communityChatId,
     }).select().single();
 
     if (error) {
