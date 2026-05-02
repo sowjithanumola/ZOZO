@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-export default function Profile() {
+export default function Profile({ onSave }: { onSave?: () => void }) {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
@@ -74,6 +74,7 @@ export default function Profile() {
       alert(`Error updating profile: ${error.message}`);
     } else {
       alert('Profile updated successfully!');
+      if (onSave) onSave();
     }
   };
 

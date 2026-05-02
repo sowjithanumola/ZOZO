@@ -11,7 +11,12 @@ export const supabase = () => {
       console.warn('Supabase URL or Anon Key is missing. Check your environment variables.');
     }
     
-    supabaseClient = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder');
+    supabaseClient = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder', {
+      auth: {
+        persistSession: true,
+        multiTab: false,
+      },
+    });
   }
   return supabaseClient;
 };
