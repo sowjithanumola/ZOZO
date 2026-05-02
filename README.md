@@ -1,20 +1,56 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+Zozo: The Community Hub
+Welcome to Zozo, a real-time community chat platform designed to bring people together in a shared space. Zozo focuses on simplicity, user identity, and instant, communal interaction.
 
-# Run and deploy your AI Studio app
+🚀 Overview
+Zozo is a web-based community chat application where every registered user contributes to a single, vibrant conversation feed. By requiring users to establish a profile, we ensure that every voice in the community is identifiable and authentic.
 
-This contains everything you need to run your app locally.
+✨ Key Features
+Profile-First Access: Users create a unique identity (Username, Avatar, Bio) before joining the community.
 
-View your app in AI Studio: https://ai.studio/apps/678dcc46-4a8b-4673-a55b-3cc3fdf1399d
+Global Community Feed: A unified chat stream where all registered members interact in real-time.
 
-## Run Locally
+Persistent Identity: Every message is anchored to a user's profile, fostering meaningful community connections.
 
-**Prerequisites:**  Node.js
+Live Updates: Built with high-performance real-time technology to ensure messages appear instantly for all users.
 
+🛠 Tech Stack
+Frontend: Built with React/Next.js for a responsive, modern interface.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Database & Backend: Powered by Supabase for secure user authentication and lightning-fast real-time database capabilities.
+
+Real-time Engine: Utilizing WebSockets via Supabase to keep the chat active and synchronized.
+
+📋 Getting Started
+Prerequisites
+A Supabase account.
+
+A configured messages table and profiles table in your database.
+
+Setup
+Clone the repository:
+
+Bash
+git clone https://github.com/your-repo/zozo
+Install dependencies:
+
+Bash
+npm install
+Configure Environment Variables:
+Create a .env.local file and add your Supabase project credentials:
+
+Code snippet
+NEXT_PUBLIC_SUPABASE_URL=your_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+Run the development server:
+
+Bash
+npm run dev
+🤝 Community Guidelines
+Be respectful and kind to all members.
+
+Keep the conversation productive and community-focused.
+
+Help us grow by reporting any bugs or issues you encounter.
+
+🛠 Troubleshooting
+If you encounter a not-null constraint error when sending messages, ensure that your sendMessage function is correctly passing the chat_id associated with your primary community room.
