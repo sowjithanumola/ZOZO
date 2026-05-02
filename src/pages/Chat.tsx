@@ -12,6 +12,7 @@ export default function Chat() {
   const [view, setView] = useState<'chat' | 'profile' | 'settings'>('chat');
   const [darkMode, setDarkMode] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -45,22 +46,30 @@ export default function Chat() {
   };
 
   return (
-    <div className={`flex h-screen ${darkMode ? 'dark bg-zinc-950 text-zinc-50' : 'bg-white text-zinc-900'} font-sans`} style={{ backgroundColor: '#89c2f7' }}>
+    <div className={`flex h-screen ${darkMode ? 'dark bg-zinc-950 text-zinc-50' : 'bg-white text-zinc-900'} font-sans relative`} style={{ backgroundColor: '#89c2f7' }}>
+      {/* Mobile Toggle */}
+      <button 
+        className="md:hidden absolute top-4 left-4 z-50 p-2 bg-white/20 rounded-lg"
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+      >
+        <MessageSquareCode size={24} />
+      </button>
+
       {/* Sidebar */}
-      <div className={`w-80 border-r ${darkMode ? 'border-zinc-800' : 'border-zinc-200'} flex flex-col p-4 gap-6`}>
-        <div className="flex items-center gap-2 px-2">
+      <div className={`${isSidebarOpen ? 'flex' : 'hidden'} md:flex absolute md:relative z-40 w-80 h-full border-r ${darkMode ? 'border-zinc-800 bg-zinc-950/95' : 'border-zinc-200 bg-white/95'} flex flex-col p-4 gap-6`}>
+        <div className="flex items-center gap-2 px-2 pt-12 md:pt-0">
           <MessageSquareCode size={24} />
-          <span className="font-semibold text-lg cursor-pointer" onClick={() => setView('chat')}>ZOZO</span>
+          <span className="font-semibold text-lg cursor-pointer" onClick={() => { setView('chat'); setIsSidebarOpen(false); }}>ZOZO</span>
         </div>
         
-        <Sidebar onSelectUser={(u) => { setSelectedUser(u); setView('profile'); }} />
+        <Sidebar onSelectUser={(u) => { setSelectedUser(u); setView('profile'); setIsSidebarOpen(false); }} />
         
         <div className={`border-t ${darkMode ? 'border-zinc-800' : 'border-zinc-200'} pt-4 flex items-center justify-between`}>
-           <User size={20} className="cursor-pointer hover:text-blue-500" onClick={() => setView('profile')}/>
+           <User size={20} className="cursor-pointer hover:text-blue-500" onClick={() => { setView('profile'); setIsSidebarOpen(false); }}/>
            <button onClick={toggleTheme}>
              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
            </button>
-           <button className="text-xs font-bold text-zinc-500 hover:text-blue-500" title="Sowjith Anumola (sowjith.anumola@gmail.com)">Sowjith Anumola</button>
+           <button className="text-xs font-bold text-zinc-500 hover:text-blue-500" title="Sowjith Anumola (sowjith.anumola@gmail.com)">Sowjith</button>
            <LogOut size={20} className="cursor-pointer hover:text-red-500" onClick={() => supabase().auth.signOut().then(() => navigate('/login'))}/>
         </div>
       </div>
