@@ -15,33 +15,26 @@ export default function CommunityChat({ currentUser, darkMode }: { currentUser: 
     const initChat = async () => {
       try {
         console.log('DEBUG: initChat starting...');
-        // Find or create "Crazy Souls" room
-        let { data: chat, error: fetchError } = await supabase()
+        // Find "Crazy Souls" room without relying on 'name' column
+        let { data: chats, error: fetchError } = await supabase()
             .from('chats')
-            .select('id')
-            .eq('name', 'Crazy Souls')
-            .maybeSingle();
-
-        console.log('DEBUG: initChat fetch result:', { chat, fetchError });
+            .select('*');
         
-        let targetChatId = chat?.id;
+        console.log('DEBUG: initChat fetch all chats result:', { chats, fetchError });
+        
+        // Try to find the chat manually, assuming it might have a title, label, or similar. 
+        // If not found, log all chats to help debugging.
+        let targetChat = chats?.find((c: any) => c.name === 'Crazy Souls'); 
+        
+        let targetChatId = targetChat?.id;
 
         if (!targetChatId) {
-            console.log('DEBUG: Creating new "Crazy Souls" chat room...');
-            const { data: newChat, error: createError } = await supabase()
-                .from('chats')
-                .insert({ name: 'Crazy Souls', is_group: true })
-                .select()
-                .single();
-            if (createError) {
-                console.error('CRITICAL: Error creating chat room:', createError);
-                throw createError;
-            }
-            targetChatId = newChat.id;
-            console.log('DEBUG: Created new chat room:', targetChatId);
+            console.warn('DEBUG: "Crazy Souls" chat room not found. Skipping auto-creation to avoid schema mismatch.');
+        } else {
+            console.log('DEBUG: Found chat room:', targetChatId);
         }
         
-        setCommunityChatId(targetChatId);
+        setCommunityChatId(targetChatId || null);
 
         const { data, error } = await supabase()
           .from('messages')
