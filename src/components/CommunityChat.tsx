@@ -38,7 +38,10 @@ export default function CommunityChat({ currentUser, darkMode }: { currentUser: 
 
   return (
     <div className={`flex flex-col h-full bg-white dark:bg-zinc-950`}>
-      <ChannelProvider channelName="general-chat">
+      <ChannelProvider channelName="crazy-souls">
+        <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 font-bold text-lg dark:text-zinc-50">
+          Crazy Souls
+        </div>
         <ChatContent 
           messages={messages} 
           setMessages={setMessages} 
@@ -56,7 +59,7 @@ function ChatContent({ messages, setMessages, currentUser, darkMode, messagesEnd
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const { channel } = useChannel('general-chat', (message) => {
+  const { channel } = useChannel('crazy-souls', (message) => {
      setMessages((prev: any) => {
         if (prev.some((m: any) => String(m.id) === String(message.data.id))) return prev;
         return [...prev, message.data];
