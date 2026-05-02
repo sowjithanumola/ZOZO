@@ -14,23 +14,31 @@ export default function CommunityChat({ currentUser, darkMode }: { currentUser: 
   useEffect(() => {
     const initChat = async () => {
       try {
+        console.log('DEBUG: initChat starting...');
         // Find or create "Crazy Souls" room
         let { data: chat, error: fetchError } = await supabase()
             .from('chats')
             .select('id')
             .eq('name', 'Crazy Souls')
             .maybeSingle();
+
+        console.log('DEBUG: initChat fetch result:', { chat, fetchError });
         
         let targetChatId = chat?.id;
 
         if (!targetChatId) {
+            console.log('DEBUG: Creating new "Crazy Souls" chat room...');
             const { data: newChat, error: createError } = await supabase()
                 .from('chats')
                 .insert({ name: 'Crazy Souls', is_group: true })
                 .select()
                 .single();
-            if (createError) throw createError;
+            if (createError) {
+                console.error('CRITICAL: Error creating chat room:', createError);
+                throw createError;
+            }
             targetChatId = newChat.id;
+            console.log('DEBUG: Created new chat room:', targetChatId);
         }
         
         setCommunityChatId(targetChatId);
@@ -91,10 +99,20 @@ function ChatContent({ messages, setMessages, currentUser, darkMode, messagesEnd
   });
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !communityChatId) return;
+    console.log('DEBUG: sendMessage called, communityChatId:', communityChatId);
+    if (!newMessage.trim() || !communityChatId) {
+        console.warn('DEBUG: sendMessage aborted. newMessage:', newMessage, 'communityChatId:', communityChatId);
+        return;
+    }
     
     const msgToSend = newMessage;
     setNewMessage('');
+
+    console.log('DEBUG: Inserting message with:', {
+        sender_id: currentUser.id,
+        content: msgToSend,
+        chat_id: communityChatId,
+    });
 
     const { data: newMsg, error } = await supabase().from('messages').insert({
         sender_id: currentUser.id,
