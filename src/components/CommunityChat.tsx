@@ -8,38 +8,28 @@ import EmojiPicker from 'emoji-picker-react';
 export default function CommunityChat({ currentUser, darkMode }: { currentUser: any; darkMode: boolean }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [communityChatId, setCommunityChatId] = useState<string | null>(null);
+  const [communityChatId, setCommunityChatId] = useState<number | null>(16);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const initChat = async () => {
       try {
-        console.log('DEBUG: initChat starting...');
-        // Find "Crazy Souls" room without relying on 'name' column
         let { data: chats, error: fetchError } = await supabase()
             .from('chats')
             .select('*');
         
-        console.log('DEBUG: initChat fetch all chats result:', { chats, fetchError });
-        
-        // Try to find the chat manually, assuming it might have a title, label, or similar. 
-        // If not found, log all chats to help debugging.
-        let targetChat = chats?.find((c: any) => c.name === 'Crazy Souls'); 
+        let targetChat = chats && chats.length > 0 ? chats[chats.length - 1] : null; 
         
         let targetChatId = targetChat?.id;
 
-        if (!targetChatId) {
-            console.warn('DEBUG: "Crazy Souls" chat room not found. Skipping auto-creation to avoid schema mismatch.');
-        } else {
-            console.log('DEBUG: Found chat room:', targetChatId);
+        if (targetChatId) {
+            setCommunityChatId(targetChatId);
         }
-        
-        setCommunityChatId(targetChatId || null);
 
         const { data, error } = await supabase()
           .from('messages')
           .select('*')
-          .eq('chat_id', targetChatId)
+          .eq('chat_id', targetChatId || 16)
           .order('created_at', { ascending: true });
         
         if (error) {
@@ -92,20 +82,12 @@ function ChatContent({ messages, setMessages, currentUser, darkMode, messagesEnd
   });
 
   const sendMessage = async () => {
-    console.log('DEBUG: sendMessage called, communityChatId:', communityChatId);
     if (!newMessage.trim() || !communityChatId) {
-        console.warn('DEBUG: sendMessage aborted. newMessage:', newMessage, 'communityChatId:', communityChatId);
         return;
     }
     
     const msgToSend = newMessage;
     setNewMessage('');
-
-    console.log('DEBUG: Inserting message with:', {
-        sender_id: currentUser.id,
-        content: msgToSend,
-        chat_id: communityChatId,
-    });
 
     const { data: newMsg, error } = await supabase().from('messages').insert({
         sender_id: currentUser.id,
@@ -115,14 +97,12 @@ function ChatContent({ messages, setMessages, currentUser, darkMode, messagesEnd
 
     if (error) {
         console.error('CRITICAL Error saving message (Supabase):', error);
-        alert('Failed to send message: ' + error.message); // Added alert to help user debug
+        alert('Failed to send message: ' + error.message);
         return;
     }
 
-    console.log('Message saved to Supabase, publishing to Ably...');
     try {
         await channel.publish('new-message', newMsg);
-        console.log('Message published to Ably.');
     } catch (e) {
         console.error('CRITICAL Error publishing message (Ably):', e);
         alert('Failed to real-time sync message.');
