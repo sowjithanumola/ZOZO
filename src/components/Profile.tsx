@@ -7,7 +7,6 @@ export default function Profile({ onSave }: { onSave?: () => void }) {
   const [bio, setBio] = useState('');
   const [website, setWebsite] = useState('');
   const [gender, setGender] = useState('Male');
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -41,22 +40,7 @@ export default function Profile({ onSave }: { onSave?: () => void }) {
     if (!user) return;
 
     let final_avatar_url = avatarUrl;
-    if (avatarFile) {
-      const fileExt = avatarFile.name.split('.').pop();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase().storage
-        .from('avatars')
-        .upload(fileName, avatarFile, { upsert: true });
-        
-      if (uploadError) { 
-          alert(`Error uploading photo: ${uploadError.message}`); 
-          return; 
-      }
-      
-      const { data } = supabase().storage.from('avatars').getPublicUrl(fileName);
-      final_avatar_url = data.publicUrl;
-      setAvatarUrl(final_avatar_url);
-    }
+    // Removed avatar upload logic
 
     const { error } = await supabase()
       .from('users')
@@ -90,15 +74,10 @@ export default function Profile({ onSave }: { onSave?: () => void }) {
         <div className="relative group">
           <img 
             src={avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'A')}&background=random&size=256`} 
-            className="w-32 h-32 rounded-full object-cover ring-4 ring-blue-500/20 group-hover:ring-blue-500/40 transition-all duration-300"
+            className="w-32 h-32 rounded-full object-cover ring-4 ring-blue-500/20 transition-all duration-300"
             alt="Profile Avatar"
           />
-          <input type="file" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} className="hidden" id="photo-upload" />
-          <label htmlFor="photo-upload" className="absolute bottom-1 right-1 p-2.5 bg-blue-600 text-white rounded-full shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
-          </label>
         </div>
-        {avatarFile && <p className="text-xs font-bold text-blue-500 animate-pulse">New photo selected: {avatarFile.name}</p>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

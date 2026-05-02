@@ -78,11 +78,19 @@ function ChatContent({ messages, setMessages, currentUser, darkMode, messagesEnd
     }).select().single();
 
     if (error) {
-        console.error('Error saving message:', error);
+        console.error('CRITICAL Error saving message (Supabase):', error);
+        alert('Failed to send message: ' + error.message); // Added alert to help user debug
         return;
     }
 
-    await channel.publish('new-message', newMsg);
+    console.log('Message saved to Supabase, publishing to Ably...');
+    try {
+        await channel.publish('new-message', newMsg);
+        console.log('Message published to Ably.');
+    } catch (e) {
+        console.error('CRITICAL Error publishing message (Ably):', e);
+        alert('Failed to real-time sync message.');
+    }
   };
 
   return (
